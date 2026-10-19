@@ -99,5 +99,5 @@ Some firmwares might require more extensive modifications if gadgets don't exist
 
 ## How to use
 1. Run kernel exploit chain and get to elfldr
-2. Send `byepervisor.elf`
+2. Send `byepervisor_reborn.elf`
 3. Follow the directions of the notifications

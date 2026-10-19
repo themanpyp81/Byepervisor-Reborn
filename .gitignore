@@ -3,3 +3,4 @@
 *.d
 *~
 break_hv_payload/break_hv.bin
+tools/hosttest/test_dispatch

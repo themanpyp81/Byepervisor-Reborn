@@ -46,6 +46,14 @@ jobs:
     - name: Check offset tables
       run: python3 tools/check_offsets.py .
 
+    # The payload cannot be run without a console, but the firmware dispatch
+    # logic can be tested on the host: every supported version is checked to
+    # resolve to the correct offset table.
+    - name: Test firmware dispatch
+      run: make check-dispatch
+      env:
+        PS5_PAYLOAD_SDK: ${{ runner.tool_cache }}/ps5-payload-sdk
+
     - name: Build payload
       run: make
       env:

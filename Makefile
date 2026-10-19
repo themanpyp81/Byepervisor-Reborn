@@ -32,6 +32,10 @@ SRCS := main.c kdlsym.c khook.c paging.c util.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(OBJS:.o=.d)
 
+HOSTTEST_DIR := tools/hosttest
+HOSTTEST_BIN := $(HOSTTEST_DIR)/test_dispatch
+HOSTCC ?= cc
+
 CFLAGS := -Wall -Werror -Wno-unused-function -g -I./include
 LDFLAGS := -lSceSystemService
 
@@ -58,7 +62,7 @@ $(ELF): $(OBJS) $(PAYLOAD_HDR)
 -include $(DEPS)
 
 clean:
-	rm -f $(ELF) $(OBJS) $(DEPS)
+	rm -f $(ELF) $(OBJS) $(DEPS) $(HOSTTEST_BIN)
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
 
 # Validate the per-firmware offset tables: entry order must match the enums,
@@ -66,7 +70,19 @@ clean:
 check-offsets:
 	python3 tools/check_offsets.py .
 
-check: check-offsets $(ELF)
+# Build and run the host-side test of the firmware dispatch logic. This
+# compiles the real kdlsym.c against a mock of the SDK symbols and checks
+# that each supported firmware version resolves to the correct offset table.
+check-dispatch: $(HOSTTEST_BIN)
+	./$(HOSTTEST_BIN)
+
+$(HOSTTEST_BIN): $(HOSTTEST_DIR)/test_dispatch.c kdlsym.c include/kdlsym.h \
+                 $(wildcard include/offsets/*.h) $(HOSTTEST_DIR)/mock/ps5/kernel.h
+	$(HOSTCC) -std=gnu11 -Wall -Wextra -O1 \
+	  -I $(HOSTTEST_DIR)/mock -I include \
+	  -o $@ $(HOSTTEST_DIR)/test_dispatch.c kdlsym.c
+
+check: check-offsets check-dispatch $(ELF)
 
 test: $(ELF)
 	$(PS5_DEPLOY) -h $(PS5_HOST) -p $(PS5_PORT) $^
