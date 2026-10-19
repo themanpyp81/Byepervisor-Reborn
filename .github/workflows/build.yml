@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.txt"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.txt"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Checkout payload SDK
+      uses: actions/checkout@v4
+      with:
+        repository: ps5-payload-dev/sdk
+        path: sdk
+
+    - name: Install prerequisites
+      run: |
+        sudo apt update
+        sudo apt install clang-18 lld-18 mingw-w64 cmake meson python3
+
+    - name: Build SDK
+      run: |
+        make -C sdk install
+        ./sdk/libcxx.sh
+      env:
+        DESTDIR: ${{ runner.tool_cache }}/ps5-payload-sdk
+        PS5_PAYLOAD_SDK: ${{ runner.tool_cache }}/ps5-payload-sdk
+        WIN: 1
+
+    # The offset tables are positional arrays indexed by the ksym_t / kgadget_t
+    # enums. A table that is out of order, short, or not wired into kdlsym.c
+    # still compiles and then reads the wrong kernel offsets at runtime, so
+    # check them before building.
+    - name: Check offset tables
+      run: python3 tools/check_offsets.py .
+
+    - name: Build payload
+      run: make
+      env:
+        PS5_PAYLOAD_SDK: ${{ runner.tool_cache }}/ps5-payload-sdk
+
+    - name: Verify payload was produced
+      run: |
+        test -f byepervisor_reborn.elf
+        file byepervisor_reborn.elf

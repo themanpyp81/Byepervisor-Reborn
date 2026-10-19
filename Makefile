@@ -28,19 +28,45 @@ ELF := byepervisor_reborn.elf
 PAYLOAD_DIR := break_hv_payload
 PAYLOAD_HDR := $(PAYLOAD_DIR)/break_hv.h
 
-CFLAGS := -Wall -Werror -Wno-unused-function -g -I./include -lSceSystemService
+SRCS := main.c kdlsym.c khook.c paging.c util.c
+OBJS := $(SRCS:.c=.o)
+DEPS := $(OBJS:.o=.d)
+
+CFLAGS := -Wall -Werror -Wno-unused-function -g -I./include
+LDFLAGS := -lSceSystemService
+
+# Emit per-object dependency files so that editing a header (for example an
+# offset table in include/offsets/) actually triggers a rebuild. Without this
+# the build silently reuses a stale object and a new offset table never
+# reaches the payload.
+DEPFLAGS := -MMD -MP
 
 all: $(ELF)
 
 $(PAYLOAD_HDR): $(PAYLOAD_DIR)/break_hv.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld
 	sh $(PAYLOAD_DIR)/build.sh
 
-$(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c
-	$(CC) $(CFLAGS) -o $@ $(filter %.c,$^)
+%.o: %.c
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# main.c embeds the generated supervisor-mode shellcode blob.
+main.o: $(PAYLOAD_HDR)
+
+$(ELF): $(OBJS) $(PAYLOAD_HDR)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+
+-include $(DEPS)
 
 clean:
-	rm -f $(ELF)
+	rm -f $(ELF) $(OBJS) $(DEPS)
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
+
+# Validate the per-firmware offset tables: entry order must match the enums,
+# and every table must be included and dispatched by kdlsym.c.
+check-offsets:
+	python3 tools/check_offsets.py .
+
+check: check-offsets $(ELF)
 
 test: $(ELF)
 	$(PS5_DEPLOY) -h $(PS5_HOST) -p $(PS5_PORT) $^

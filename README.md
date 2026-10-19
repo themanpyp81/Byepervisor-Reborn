@@ -6,11 +6,29 @@ PS5 hypervisor exploit for 6.xx - 13.60 firmware. Bug details can be found [here
 
 Very similarly to (one version of) [byepervisor of old](https://github.com/PS5Dev/Byepervisor), this exploits the rest mode path too :)
 
-Currently only the following firmwares are fully supported:
+The following firmwares have offset tables in `include/offsets/`:
 
-- 13.60
-- 13.20
-- 13.00 (untested)
+| Firmware | Table | Status |
+|---|---|---|
+| 12.00 | `12_00.h` | untested |
+| 12.02 | `12_02.h` | untested |
+| 12.20 | `12_20.h` | untested |
+| 12.40 | `12_40.h` | untested |
+| 12.60 | `12_60.h` | untested |
+| 12.70 | `12_70.h` | untested |
+| 13.00 | `13_00.h` | untested |
+| 13.20 | `13_20.h` | tested |
+| 13.40 | `13_40.h` | untested |
+| 13.42 | `13_42.h` | untested |
+| 13.60 | `13_60.h` | tested |
+
+"untested" means the offset table is present and the payload builds and
+dispatches for that version, but the exploit chain has not been confirmed on
+hardware for it. Only report a firmware as working once you have run it.
+
+Some firmwares share an identical kernel and therefore share an identical
+offset table: 12.00/12.02, 12.20/12.40, and 12.60/12.70. The tables are
+byte-identical within each of those pairs.
 
 However this bug should technically be exploitable as low as 6.xx. With modifications, it could work on 14.00 as well, but this is not provided here, especially since there is no public 14.00 kernel exploit anyways.
 
@@ -35,6 +53,36 @@ However this bug should technically be exploitable as low as 6.xx. With modifica
 ## Build notes
 This exploit payload is built using the [PS5-Payload-Dev SDK](https://github.com/ps5-payload-dev/sdk). Note also that the build for `break_hv_payload/` is slightly special, as it gets compiled to a flat binary of minimal size. The entirety of code in `break_hv_payload/` runs in supervisor/kernel mode.
 
+The SDK must be available in `PS5_PAYLOAD_SDK`:
+
+```sh
+export PS5_PAYLOAD_SDK=/path/to/ps5-payload-sdk
+make
+```
+
+`make` produces `byepervisor_reborn.elf`, which is what gets sent to the
+console via `elfldr`.
+
+### Checks
+
+`make check` runs the offset table validator and then builds the payload.
+
+The tables in `include/offsets/` are positional arrays indexed by the `ksym_t`
+and `kgadget_t` enums in `include/kdlsym.h`. Because the order of the entries
+only exists in the trailing comments, the compiler cannot check it, and a
+table that is out of order still builds and still passes every bounds check
+before reading the wrong kernel offset at runtime. `tools/check_offsets.py`
+verifies that:
+
+- every table lists its entries in the same order as the enums
+- every table has exactly one entry per enum value, and no zero offsets
+- every table in `include/offsets/` is `#include`d by `kdlsym.c`
+- every table in `include/offsets/` is dispatched by the switches in `kdlsym.c`
+- every version dispatched in `kdlsym.c` has a table
+
+The last two checks exist because a table added without its matching
+`#include` leaves the symbols undeclared and the project unbuildable.
+
 ## Adding firmware support
 To add support for a different firmware, the main thing that needs to be added is the header file in `include/offsets/`. This includes all the kernel offsets that are needed.
 
@@ -42,6 +90,10 @@ Once the offsets have been added, the following functions need to be modified to
 - `kgadget()`
 - `kdlsym()`
 - `rawoff()`
+
+The new header also needs to be added to the `#include` list at the top of
+`kdlsym.c`, otherwise the offsets will not compile. `make check-offsets` will
+tell you if any of this was missed.
 
 Some firmwares might require more extensive modifications if gadgets don't exist for them. 6.xx for example likely will not have some gadgets that are used on 13.xx.
 

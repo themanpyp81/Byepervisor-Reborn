@@ -4,12 +4,61 @@
 #include "util.h"
 #include "kdlsym.h"
 
+#include "offsets/12_00.h"
+#include "offsets/12_02.h"
+#include "offsets/12_20.h"
+#include "offsets/12_40.h"
+#include "offsets/12_60.h"
+#include "offsets/12_70.h"
 #include "offsets/13_00.h"
 #include "offsets/13_20.h"
+#include "offsets/13_40.h"
+#include "offsets/13_42.h"
 #include "offsets/13_60.h"
 
 uint64_t g_fw_version;
 uint64_t g_kernel_base = 0;
+
+/*
+ * Compile-time guards for the offset tables.
+ *
+ * The tables in include/offsets/ are positional arrays indexed by the ksym_t
+ * and kgadget_t enums in include/kdlsym.h. The bounds checks in kdlsym() and
+ * kgadget() compare the requested index against KERNEL_SYM_MAX /
+ * KERNEL_GADGET_MAX, not against the actual size of the selected table. A
+ * table that is short would therefore be read out of bounds and the payload
+ * would operate on a garbage kernel address. These assertions turn that into
+ * a build error instead.
+ *
+ * These checks cannot validate the *order* of the entries, since the order
+ * only exists in the comments. tools/check_offsets.py verifies that for every
+ * table, and is run by CI (make check-offsets).
+ */
+#define TABLE_LEN(tbl) (sizeof(tbl) / sizeof((tbl)[0]))
+
+_Static_assert(TABLE_LEN(g_sym_map_1200)    == KERNEL_SYM_MAX,     "g_sym_map_1200");
+_Static_assert(TABLE_LEN(g_sym_map_1202)    == KERNEL_SYM_MAX,     "g_sym_map_1202");
+_Static_assert(TABLE_LEN(g_sym_map_1220)    == KERNEL_SYM_MAX,     "g_sym_map_1220");
+_Static_assert(TABLE_LEN(g_sym_map_1240)    == KERNEL_SYM_MAX,     "g_sym_map_1240");
+_Static_assert(TABLE_LEN(g_sym_map_1260)    == KERNEL_SYM_MAX,     "g_sym_map_1260");
+_Static_assert(TABLE_LEN(g_sym_map_1270)    == KERNEL_SYM_MAX,     "g_sym_map_1270");
+_Static_assert(TABLE_LEN(g_sym_map_1300)    == KERNEL_SYM_MAX,     "g_sym_map_1300");
+_Static_assert(TABLE_LEN(g_sym_map_1320)    == KERNEL_SYM_MAX,     "g_sym_map_1320");
+_Static_assert(TABLE_LEN(g_sym_map_1340)    == KERNEL_SYM_MAX,     "g_sym_map_1340");
+_Static_assert(TABLE_LEN(g_sym_map_1342)    == KERNEL_SYM_MAX,     "g_sym_map_1342");
+_Static_assert(TABLE_LEN(g_sym_map_1360)    == KERNEL_SYM_MAX,     "g_sym_map_1360");
+
+_Static_assert(TABLE_LEN(g_gadget_map_1200) == KERNEL_GADGET_MAX, "g_gadget_map_1200");
+_Static_assert(TABLE_LEN(g_gadget_map_1202) == KERNEL_GADGET_MAX, "g_gadget_map_1202");
+_Static_assert(TABLE_LEN(g_gadget_map_1220) == KERNEL_GADGET_MAX, "g_gadget_map_1220");
+_Static_assert(TABLE_LEN(g_gadget_map_1240) == KERNEL_GADGET_MAX, "g_gadget_map_1240");
+_Static_assert(TABLE_LEN(g_gadget_map_1260) == KERNEL_GADGET_MAX, "g_gadget_map_1260");
+_Static_assert(TABLE_LEN(g_gadget_map_1270) == KERNEL_GADGET_MAX, "g_gadget_map_1270");
+_Static_assert(TABLE_LEN(g_gadget_map_1300) == KERNEL_GADGET_MAX, "g_gadget_map_1300");
+_Static_assert(TABLE_LEN(g_gadget_map_1320) == KERNEL_GADGET_MAX, "g_gadget_map_1320");
+_Static_assert(TABLE_LEN(g_gadget_map_1340) == KERNEL_GADGET_MAX, "g_gadget_map_1340");
+_Static_assert(TABLE_LEN(g_gadget_map_1342) == KERNEL_GADGET_MAX, "g_gadget_map_1342");
+_Static_assert(TABLE_LEN(g_gadget_map_1360) == KERNEL_GADGET_MAX, "g_gadget_map_1360");
 
 uint64_t ktext(uint64_t offset)
 {
@@ -44,7 +93,7 @@ uint64_t kgadget(kgadget_t gadget)
   case 0x13420000:
     return ktext(g_gadget_map_1342[gadget]);
   case 0x13600000:
-    return ktext(g_gadget_map_1360[gadget]);  
+    return ktext(g_gadget_map_1360[gadget]);
   default:
     return 0;
   }
@@ -78,7 +127,7 @@ uint64_t kdlsym(ksym_t sym)
   case 0x13420000:
     return ktext(g_sym_map_1342[sym]);
   case 0x13600000:
-    return ktext(g_sym_map_1360[sym]);     
+    return ktext(g_sym_map_1360[sym]);
   default:
     return 0;
   }
@@ -112,7 +161,7 @@ uint64_t rawoff(ksym_t sym)
   case 0x13420000:
     return g_sym_map_1342[sym];
   case 0x13600000:
-    return g_sym_map_1360[sym];  
+    return g_sym_map_1360[sym];
   default:
     return 0;
   }
