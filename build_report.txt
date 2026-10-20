@@ -231,6 +231,7 @@ Type:      ELF 64-bit LSB pie executable, x86-64, dynamically linked,
 --------------------------------------------------------------------------------
   Date:       2026-10-19
   Result:     CONFIRMED WORKING ON HARDWARE
+  Firmware:   12.20
   Reported:   the payload was deployed to the console, the exploit chain was
               run, and the result was confirmed good by the project manager.
   Deployed:   byepervisor_reborn.elf, SHA256
@@ -238,29 +239,33 @@ Type:      ELF 64-bit LSB pie executable, x86-64, dynamically linked,
               181,576 bytes, built from commit d4ec090 (plus the README
               filename fix), PS5_PAYLOAD_SDK=/home/gkillz/ps5-sdk/ps5-payload-sdk
 
-  FIRMWARE VERSION OF THE TESTED CONSOLE: not recorded in this report.
+  WHAT THIS ESTABLISHES
+    - The 12.20 offset table is correct: all 14 kernel symbol offsets and all
+      21 gadget offsets resolve to the right addresses on a real console.
+    - The gadget set required by the exploit chain is present on 12.20.
+    - The SDK resolves the 12.xx kernel text base correctly. The SDK maps the
+      whole 12.00 - 12.70 range to KERNEL_ADDRESS_TEXT_BASE =
+      KERNEL_ADDRESS_DATA_BASE - 0x0D50000, and the 12.20 result confirms
+      that value is right.
+    - The exploit chain and the rest-mode resume path work end to end.
+    - The 12.20 support added by upstream commit 768e8a1 is functional, not
+      just present.
 
-  The payload prints the detected firmware version as the first thing it
-  does after start-up:
+  WHAT IT DOES NOT ESTABLISH
+    - Nothing about the other ten firmwares. They remain untested.
+    - 12.40 is byte-identical to the verified 12.20 table, so it should work
+      on the same kernel, but it has not been run and its table was copied
+      rather than independently derived.
+    - 12.60 and 12.70 are byte-identical to each other and differ from the
+      verified 12.20 table in exactly one symbol, KERNEL_SYM_HV_MP_STARTUP_CALL
+      (0xC9DF50 in 12.20, 0xC9DFB0 in 12.60/12.70, a delta of 0x60). They are
+      therefore only as good as that single unverified symbol.
+    - 12.00 and 12.02 use a different table from the rest of the 12.xx range
+      and are not covered by the 12.20 result.
 
-      [+] Detected firmware: <major>.<minor>
-
-  so the version can be recovered from the console output of the run that
-  succeeded. It was not captured here and should be filled in, because it
-  determines which row of the support matrix in README.md can be marked as
-  hardware verified, and whether the result also confirms the 12.40 /
-  12.70 offset provenance question raised in section 8(b).
-
-  What this validation does and does not establish:
-    - DOES establish that the offset table for the tested firmware is
-      correct, that the gadget set is present, that the kernel text base
-      is resolved correctly by the SDK, and that the exploit chain and the
-      rest-mode resume path work end to end on real hardware.
-    - DOES NOT establish anything about the other ten firmwares. Those
-      remain untested.
-    - DOES NOT by itself resolve the 12.40 / 12.70 provenance question
-      unless the tested console was running one of those versions, since
-      their tables are byte-identical to 12.20 and 12.60 respectively.
+  Consequence for section 8(b): the 12.40 / 12.70 provenance question is
+  narrowed but not closed. 12.40 is a copy of a table now known to be correct;
+  12.70 depends on one symbol that differs from it.
 
 ================================================================================
 END OF BUILD REPORT

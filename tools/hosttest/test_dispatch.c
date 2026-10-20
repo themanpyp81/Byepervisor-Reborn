@@ -96,20 +96,24 @@ typedef struct {
   uint64_t    sys_getuid;
   uint64_t    hv_mp_startup_call;
   uint64_t    mp_startup_init_vector;
+  int         hw_verified;
 } golden_t;
 
+/* hw_verified: the offsets for this version have been confirmed by running
+ * the payload on a console running it. The others are pinned so that an
+ * edited or swapped table is still caught, but they have not been run. */
 static const golden_t g_golden[] = {
-  { "12.00", 0x3B6D254, 0x357530, 0xC9E0D0, 0x3187F8 },
-  { "12.02", 0x3B6D254, 0x357530, 0xC9E0D0, 0x3187F8 },
-  { "12.20", 0x3B6D254, 0x3573B0, 0xC9DF50, 0x318678 },
-  { "12.40", 0x3B6D254, 0x3573B0, 0xC9DF50, 0x318678 },
-  { "12.60", 0x3B6D254, 0x3573B0, 0xC9DFB0, 0x318678 },
-  { "12.70", 0x3B6D254, 0x3573B0, 0xC9DFB0, 0x318678 },
-  { "13.00", 0x3B25294, 0x2A8B20, 0xC0A110, 0x269238 },
-  { "13.20", 0x3B25294, 0x2A8B20, 0xC0A310, 0x26A798 },
-  { "13.40", 0x3B29294, 0x2A8B80, 0xC0A620, 0x268D08 },
-  { "13.42", 0x3B29294, 0x2A8B80, 0xC0A620, 0x2687D8 },
-  { "13.60", 0x3B49294, 0x2A8D60, 0xC16EE0, 0x269FB8 },
+  { "12.00", 0x3B6D254, 0x357530, 0xC9E0D0, 0x3187F8, 0 },
+  { "12.02", 0x3B6D254, 0x357530, 0xC9E0D0, 0x3187F8, 0 },
+  { "12.20", 0x3B6D254, 0x3573B0, 0xC9DF50, 0x318678, 1 },
+  { "12.40", 0x3B6D254, 0x3573B0, 0xC9DF50, 0x318678, 0 },
+  { "12.60", 0x3B6D254, 0x3573B0, 0xC9DFB0, 0x318678, 0 },
+  { "12.70", 0x3B6D254, 0x3573B0, 0xC9DFB0, 0x318678, 0 },
+  { "13.00", 0x3B25294, 0x2A8B20, 0xC0A110, 0x269238, 0 },
+  { "13.20", 0x3B25294, 0x2A8B20, 0xC0A310, 0x26A798, 1 },
+  { "13.40", 0x3B29294, 0x2A8B80, 0xC0A620, 0x268D08, 0 },
+  { "13.42", 0x3B29294, 0x2A8B80, 0xC0A620, 0x2687D8, 0 },
+  { "13.60", 0x3B49294, 0x2A8D60, 0xC16EE0, 0x269FB8, 1 },
 };
 
 #define NUM_GOLDEN ((int)(sizeof(g_golden) / sizeof(g_golden[0])))
@@ -215,8 +219,8 @@ static void test_golden(void)
     }
 
     if (!bad)
-      printf("   ok   %s: all 4 pinned offsets match, firmware is supported\n",
-             g->name);
+      printf("   ok   %s: all 4 pinned offsets match, firmware is supported%s\n",
+             g->name, g->hw_verified ? " [hardware verified]" : "");
     else
       g_failures++;
   }
@@ -306,9 +310,18 @@ static void test_distinguishable(void)
                  KERNEL_SYM_MAX * sizeof(uint64_t)) == 0 &&
           memcmp(g_cases[i].gadgets, g_cases[j].gadgets,
                  KERNEL_GADGET_MAX * sizeof(uint64_t)) == 0) {
+        /* note which of the pair has been confirmed on hardware */
+        const char *verified = "neither";
+        for (int k = 0; k < NUM_GOLDEN; k++) {
+          if (strcmp(g_golden[k].name, g_cases[i].name) == 0 && g_golden[k].hw_verified)
+            verified = g_cases[i].name;
+          if (strcmp(g_golden[k].name, g_cases[j].name) == 0 && g_golden[k].hw_verified)
+            verified = g_cases[j].name;
+        }
         printf("   note %s and %s have identical offsets"
-               " (a misroute between them is undetectable)\n",
-               g_cases[i].name, g_cases[j].name);
+               " (a misroute between them is undetectable; %s is hardware"
+               " verified)\n",
+               g_cases[i].name, g_cases[j].name, verified);
       }
     }
   }

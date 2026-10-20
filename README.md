@@ -12,7 +12,7 @@ The following firmwares have offset tables in `include/offsets/`:
 |---|---|---|---|
 | 12.00 | `12_00.h` | yes | no |
 | 12.02 | `12_02.h` | yes | no |
-| 12.20 | `12_20.h` | yes | no |
+| 12.20 | `12_20.h` | yes | **yes** |
 | 12.40 | `12_40.h` | yes | no |
 | 12.60 | `12_60.h` | yes | no |
 | 12.70 | `12_70.h` | yes | no |
@@ -44,6 +44,17 @@ byte-identical within each of those pairs. A hardware confirmation on one
 member of a pair is evidence for the other, but the two tables are identical
 copies rather than independently derived, so they are not confirmed until
 run.
+
+**12.20 has been confirmed working on hardware.** That result also covers the
+adjacent 12.xx tables, with a caveat: 12.40 is byte-identical to the verified
+12.20 table, and 12.60/12.70 differ from it in exactly one symbol
+(`KERNEL_SYM_HV_MP_STARTUP_CALL`, `0xC9DF50` vs `0xC9DFB0`). So 12.40 should
+work on the same kernel as 12.20, and 12.60/12.70 should work with a single
+different symbol. Neither has been run, and 12.60/12.70 are only as good as
+that one-symbol delta.
+
+The 12.00/12.02 pair uses a different table from the rest of the 12.xx range
+and is not covered by the 12.20 result.
 
 However this bug should technically be exploitable as low as 6.xx. With modifications, it could work on 14.00 as well, but this is not provided here, especially since there is no public 14.00 kernel exploit anyways.
 
