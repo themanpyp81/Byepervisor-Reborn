@@ -1,0 +1,267 @@
+================================================================================
+BUILD REPORT - Byepervisor Reborn - Multi-Firmware Support (12.00 - 13.60)
+================================================================================
+
+1. DATE AND TIME OF WORK
+--------------------------------------------------------------------------------
+Date:    2026-10-19
+Time:    19:44 EDT
+Day:     Monday
+
+2. ENVIRONMENT
+--------------------------------------------------------------------------------
+Platform:  WSL2 (Windows Subsystem for Linux)
+OS:        Ubuntu 26.04.1 LTS
+Kernel:    6.18.54.1-microsoft-standard-WSL2
+Arch:      x86_64
+Hostname:  DESKTOP-9VR0SA9
+
+3. PROJECT
+--------------------------------------------------------------------------------
+Project:   Byepervisor Reborn (PS5 hypervisor exploit payload)
+Location:  /home/gkillz/ps5-dev/Byepervisor-Reborn      (canonical working tree)
+Reference: /home/gkillz/ps5-dev/Byepervisor-Reborn-upstream (pristine clone)
+Upstream:  https://github.com/EchoStretch/Byepervisor-Reborn.git
+Commit:    b824ac6 "Fix build for 12.xx/13.4x support and guard the offset tables"
+Base:      768e8a1 "Added 12xx13xx Support" (upstream HEAD)
+
+4. TOOLCHAIN
+--------------------------------------------------------------------------------
+PS5_PAYLOAD_SDK:  /home/gkillz/ps5-sdk/ps5-payload-sdk
+Compiler:         bin/prospero-clang  (clang 18.1.3)
+Linker:           bin/prospero-lld
+Deploy tool:      bin/prospero-deploy
+Toolchain file:   toolchain/prospero.mk
+Target lib:       target/lib/libSceSystemService.so
+Host tools:       make, python3, git
+
+SDK version support verified by disassembling __kernel_init in
+target/lib/crt1.o. All eleven target firmwares are dispatched, and the
+kernel text base deltas match the SDK source (crt/kernel.c) exactly:
+
+  12.00  0x12000000  TEXT_BASE = DATA_BASE - 0x0D50000
+  12.02  0x12020000  TEXT_BASE = DATA_BASE - 0x0D50000
+  12.20  0x12200000  TEXT_BASE = DATA_BASE - 0x0D50000
+  12.40  0x12400000  TEXT_BASE = DATA_BASE - 0x0D50000
+  12.60  0x12600000  TEXT_BASE = DATA_BASE - 0x0D50000
+  12.70  0x12700000  TEXT_BASE = DATA_BASE - 0x0D50000
+  13.00  0x13000000  TEXT_BASE = DATA_BASE - 0x0CB0000
+  13.20  0x13200000  TEXT_BASE = DATA_BASE - 0x0CB0000
+  13.40  0x13400000  TEXT_BASE = DATA_BASE - 0x0CB0000
+  13.42  0x13420000  TEXT_BASE = DATA_BASE - 0x0CB0000
+  13.60  0x13600000  TEXT_BASE = DATA_BASE - 0x0CC0000
+
+5. BUILD RESULT
+--------------------------------------------------------------------------------
+Command:   make check    (offset validation, then full build)
+Exit code: 0
+Errors:    none
+Warnings:  none
+
+Artifact:  byepervisor_reborn.elf
+Size:      181,576 bytes
+Type:      ELF 64-bit LSB pie executable, x86-64, dynamically linked,
+           with debug_info, not stripped
+
+6. FIRMWARE SUPPORT - ALL ELEVEN TARGET VERSIONS
+--------------------------------------------------------------------------------
+  Firmware  Table      Syms  Gadgets  Dispatched  Notes
+  --------  --------  -----  -------  -----------  -----------------------------
+  12.00     12_00.h      14       21  yes         offsets identical to 12.02
+  12.02     12_02.h      14       21  yes         offsets identical to 12.00
+  12.20     12_20.h      14       21  yes         offsets identical to 12.40
+  12.40     12_40.h      14       21  yes         offsets identical to 12.20
+  12.60     12_60.h      14       21  yes         offsets identical to 12.70
+  12.70     12_70.h      14       21  yes         offsets identical to 12.60
+  13.00     13_00.h      14       21  yes
+  13.20     13_20.h      14       21  yes
+  13.40     13_40.h      14       21  yes
+  13.42     13_42.h      14       21  yes
+  13.60     13_60.h      14       21  yes
+
+  All eleven version constants confirmed present in the compiled ELF.
+  All 22 offset tables confirmed compiled in (22 static symbols).
+  Table entry order verified against the ksym_t / kgadget_t enums for
+  every table: all 14 syms and 21 gadgets in exact enum order.
+
+7. DEFECTS FOUND AND FIXED
+--------------------------------------------------------------------------------
+  [1] BUILD BLOCKER - upstream main does not build
+      Commit 768e8a1 added eight offset tables and the matching switch arms
+      but never added the #include lines to kdlsym.c. A fresh clone fails
+      with 20 undeclared-identifier errors, exit code 2.
+      FIXED: all eleven tables included from kdlsym.c.
+
+  [2] MISSING HEADER DEPENDENCY TRACKING - stale builds
+      The Makefile listed only .c files as prerequisites, so make had no
+      dependency on anything under include/. Touching an offset table
+      produced "Nothing to be done for 'all'" and deployed stale code.
+      FIXED: per-object compilation with -MMD -MP, plus -include of the
+      generated .d files. Verified: touching include/offsets/12_00.h now
+      rebuilds kdlsym.o and relinks; touching include/paging.h rebuilds
+      main.o and paging.o.
+
+  [3] MIXED LINKAGE CONVENTION
+      13_00.h, 13_20.h and 13_60.h declared their tables as plain
+      "uint64_t g_sym_map_XXXX[]" (external linkage, writable, .data)
+      while the eight newer headers used "static const uint64_t". This
+      breaks the moment a second translation unit needs the tables.
+      FIXED: all eleven normalised to "static const uint64_t".
+
+  [4] NO OUT-OF-BOUNDS GUARD ON SHORT TABLES
+      kdlsym()/kgadget() bound-check the index against KERNEL_SYM_MAX /
+      KERNEL_GADGET_MAX, not against the selected table's actual length,
+      so a short table was read out of bounds.
+      FIXED: _Static_assert on every table length. Verified: removing one
+      entry from 12_00.h now fails the build with a static assertion.
+
+  [5] NO CHECK ON TABLE ENTRY ORDER
+      The tables are positional arrays whose order exists only in the
+      trailing comments, so the compiler cannot validate it. An out of
+      order table compiles, passes every bounds check, and then reads the
+      wrong kernel offsets at runtime.
+      FIXED: tools/check_offsets.py validates the order, the table
+      lengths, the zero offsets, and that every table is both included
+      and dispatched by kdlsym.c.
+      VERIFIED: run against the pristine upstream clone the tool reports
+      exactly the eight missing includes and exits 1; against the fixed
+      tree it exits 0.
+
+  [6] LINK FLAG IN COMPILE FLAGS
+      -lSceSystemService was in CFLAGS, which is invalid for the separate
+      compile step.
+      FIXED: split into CFLAGS and LDFLAGS.
+
+  [7] STALE DOCUMENTATION
+      The README listed only 13.60 / 13.20 / 13.00 as supported despite
+      eight further firmwares having been added.
+      FIXED: README now carries the actual eleven-firmware matrix, marks
+      which firmwares are tested versus merely present, and documents the
+      build and the new checks.
+
+  [8] BUILD ARTIFACTS NOT IGNORED
+      .gitignore covered *.elf / *.o / *~ but not break_hv_payload/break_hv.bin
+      or the generated .d files.
+      FIXED: added break_hv_payload/break_hv.bin and *.d.
+
+  [9] NO CONTINUOUS INTEGRATION
+      The build break in defect [1] reached main undetected.
+      FIXED: .github/workflows/build.yml builds the ps5-payload-dev SDK,
+      runs the offset validation, builds the payload, and verifies the
+      artifact.
+
+8. OPEN ITEMS AND RISKS
+--------------------------------------------------------------------------------
+  [a] HARDWARE VALIDATION NOT PERFORMED
+      Every firmware in the table above is verified to build, to dispatch
+      correctly, and to have coherent offset data, but only 13.20 and
+      13.60 are marked "tested" because only those have been run on a
+      console. The remaining nine need hardware validation before being
+      relied on.
+
+  [b] DUPLICATE OFFSET TABLES - PROVENANCE UNVERIFIED
+      12.40 is byte-identical to 12.20 and 12.70 is byte-identical to
+      12.60. This is plausible, since a firmware update that ships no
+      kernel rebuild leaves every symbol where it was, but it has not been
+      confirmed against independent kernel dumps for 12.40 and 12.70. If
+      either pair is wrong, the exploit will operate on wrong addresses.
+      Action: verify against a kernel dump for 12.40 and 12.70.
+
+  [c] HARDCODED STRUCT OFFSETS IN include/paging.h
+      KERNEL_OFFSET_VMSPACE_VM_PMAP is hardcoded to 0x1D8 and
+      KERNEL_OFFSET_PROC_P_VMSPACE to 0x200. The SDK tracks the
+      equivalent offsets per firmware (0x2E8 and 0x1D0 for 12.xx and
+      13.xx) and exposes them as runtime variables. The project's 0x1D8
+      refers to a different field, so it is not directly comparable, but
+      it is version sensitive by the author's own comment and is not
+      derived from the SDK.
+      Impact: LOW at present. get_proc_pmap() is the only consumer and it
+      is not called anywhere in the exploit path, so the value is
+      currently dead. It becomes a live bug the moment that function is
+      wired up. Action: replace with the SDK's firmware-aware values, or
+      derive the offset per firmware, before using it.
+
+  [d] KERNEL_OFFSET_PMAP_PM_PML4 (0x020) is likewise hardcoded and
+      firmware sensitive, and is used by find_pml4e().
+
+  [e] make debug requires gdb-multiarch, which is not installed in this
+      environment. The debug target cannot be exercised here.
+
+  [f] The upstream repository at github.com/EchoStretch/Byepervisor-Reborn
+      is still unbuildable for anyone cloning it. The fix in this tree is
+      committed locally and has not been pushed.
+
+9. CHANGES MADE
+--------------------------------------------------------------------------------
+  Modified:
+    kdlsym.c                     - all 11 includes, static asserts on table
+                                   lengths, reordered dispatch comments
+    Makefile                     - per-object build, -MMD -MP header deps,
+                                   CFLAGS/LDFLAGS split, check targets
+    .gitignore                   - break_hv.bin, *.d
+    README.md                    - firmware matrix, build and check docs
+    include/offsets/13_00.h      - static const linkage
+    include/offsets/13_20.h      - static const linkage
+    include/offsets/13_60.h      - static const linkage
+  Added:
+    tools/check_offsets.py       - offset table validator
+    .github/workflows/build.yml  - CI
+  Not modified:
+    main.c, khook.c, paging.c, util.c, include/kdlsym.h, include/paging.h,
+    include/util.h, include/khook.h, break_hv_payload/*
+
+  No offset value was changed. No exploit logic was changed. The changes
+  are confined to making the project build, build correctly, and fail
+  loudly when the offset data is wrong.
+
+10. SUMMARY
+--------------------------------------------------------------------------------
+  The project now builds cleanly and dispatches correctly for all eleven
+  requested firmwares (12.00 through 13.60). Three defects that would
+  each have caused a wrong or stale payload in the field were found and
+  fixed: the missing includes that made upstream unbuildable, the missing
+  header dependency tracking that silently shipped stale offset tables,
+  and the missing bounds and ordering validation that would have let a
+  malformed offset table reach the console.
+
+  Remaining work is hardware validation of the nine untested firmwares
+  and confirmation of the 12.40 / 12.70 offset provenance.
+
+11. HARDWARE VALIDATION
+--------------------------------------------------------------------------------
+  Date:       2026-10-19
+  Result:     CONFIRMED WORKING ON HARDWARE
+  Reported:   the payload was deployed to the console, the exploit chain was
+              run, and the result was confirmed good by the project manager.
+  Deployed:   byepervisor_reborn.elf, SHA256
+              7b3727b7f6294831e120eaa5489e353d333d94e06d0383949a3336f1b7b4ce1a
+              181,576 bytes, built from commit d4ec090 (plus the README
+              filename fix), PS5_PAYLOAD_SDK=/home/gkillz/ps5-sdk/ps5-payload-sdk
+
+  FIRMWARE VERSION OF THE TESTED CONSOLE: not recorded in this report.
+
+  The payload prints the detected firmware version as the first thing it
+  does after start-up:
+
+      [+] Detected firmware: <major>.<minor>
+
+  so the version can be recovered from the console output of the run that
+  succeeded. It was not captured here and should be filled in, because it
+  determines which row of the support matrix in README.md can be marked as
+  hardware verified, and whether the result also confirms the 12.40 /
+  12.70 offset provenance question raised in section 8(b).
+
+  What this validation does and does not establish:
+    - DOES establish that the offset table for the tested firmware is
+      correct, that the gadget set is present, that the kernel text base
+      is resolved correctly by the SDK, and that the exploit chain and the
+      rest-mode resume path work end to end on real hardware.
+    - DOES NOT establish anything about the other ten firmwares. Those
+      remain untested.
+    - DOES NOT by itself resolve the 12.40 / 12.70 provenance question
+      unless the tested console was running one of those versions, since
+      their tables are byte-identical to 12.20 and 12.60 respectively.
+
+================================================================================
+END OF BUILD REPORT
+================================================================================

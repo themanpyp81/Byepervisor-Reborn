@@ -8,27 +8,42 @@ Very similarly to (one version of) [byepervisor of old](https://github.com/PS5De
 
 The following firmwares have offset tables in `include/offsets/`:
 
-| Firmware | Table | Status |
-|---|---|---|
-| 12.00 | `12_00.h` | untested |
-| 12.02 | `12_02.h` | untested |
-| 12.20 | `12_20.h` | untested |
-| 12.40 | `12_40.h` | untested |
-| 12.60 | `12_60.h` | untested |
-| 12.70 | `12_70.h` | untested |
-| 13.00 | `13_00.h` | untested |
-| 13.20 | `13_20.h` | tested |
-| 13.40 | `13_40.h` | untested |
-| 13.42 | `13_42.h` | untested |
-| 13.60 | `13_60.h` | tested |
+| Firmware | Table | Builds & dispatches | Hardware verified |
+|---|---|---|---|
+| 12.00 | `12_00.h` | yes | no |
+| 12.02 | `12_02.h` | yes | no |
+| 12.20 | `12_20.h` | yes | no |
+| 12.40 | `12_40.h` | yes | no |
+| 12.60 | `12_60.h` | yes | no |
+| 12.70 | `12_70.h` | yes | no |
+| 13.00 | `13_00.h` | yes | no |
+| 13.20 | `13_20.h` | yes | yes |
+| 13.40 | `13_40.h` | yes | no |
+| 13.42 | `13_42.h` | yes | no |
+| 13.60 | `13_60.h` | yes | yes |
 
-"untested" means the offset table is present and the payload builds and
-dispatches for that version, but the exploit chain has not been confirmed on
-hardware for it. Only report a firmware as working once you have run it.
+"Builds & dispatches" means the offset table is present, the payload builds,
+and the firmware version is dispatched to that table. Every version listed
+above is covered by `make check`, which validates the table contents and the
+dispatch routing.
+
+"Hardware verified" means the exploit chain has been run on a console running
+that firmware and confirmed good. Only report a firmware as working once you
+have run it.
+
+The payload prints the version it detected as the first thing it does, so
+you can check which row a given run corresponds to:
+
+```
+[+] Detected firmware: 13.60
+```
 
 Some firmwares share an identical kernel and therefore share an identical
 offset table: 12.00/12.02, 12.20/12.40, and 12.60/12.70. The tables are
-byte-identical within each of those pairs.
+byte-identical within each of those pairs. A hardware confirmation on one
+member of a pair is evidence for the other, but the two tables are identical
+copies rather than independently derived, so they are not confirmed until
+run.
 
 However this bug should technically be exploitable as low as 6.xx. With modifications, it could work on 14.00 as well, but this is not provided here, especially since there is no public 14.00 kernel exploit anyways.
 
